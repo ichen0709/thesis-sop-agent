@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -109,4 +110,53 @@ def verify(
                 return VerifyResult(ok=False, reason="cite_out_of_range")
 
     return VerifyResult(ok=True, shown_quotes=tuple(shown))
+
+
+# 「適用」欄的 term：必須像學年度或學期，而且要出現在該條目 cite 所指文件的內文裡。
+# 兩項都過才顯示；沒過只省略「適用」那一段，其他內容照常顯示。
+_SEMESTER_LIKE = re.compile(
+    r"學年|學期|semester|academic\s*year|\b(?:fall|spring|summer|winter)\b", flags=re.IGNORECASE
+)
+
+TERM_OK = "ok"
+TERM_NOT_A_SEMESTER = "not_a_semester"
+TERM_NOT_IN_DOCUMENT = "not_in_document"
+
+
+def check_term(term: str, cited_bodies: list[str]) -> str:
+    """回傳 TERM_OK、TERM_NOT_A_SEMESTER 或 TERM_NOT_IN_DOCUMENT。term 不可是空白。"""
+    if not _SEMESTER_LIKE.search(unicodedata.normalize("NFKC", term)):
+        return TERM_NOT_A_SEMESTER
+    needle = normalize(term)
+    if any(needle in normalize(body) for body in cited_bodies):
+        return TERM_OK
+    return TERM_NOT_IN_DOCUMENT
+
+
+def sanitize_terms(
+    response: ModelResponse, docs: Mapping[str, SourceDoc]
+) -> tuple[ModelResponse, list[str]]:
+    """檢查每個期限的 term。回傳 (處理後的回答, 被拿掉的 term 的原因清單)。
+
+    - term 是 None 或空白：視為沒有 term，不算被拿掉。
+    - term 沒過：只把該條目的 term 改成 None，其他內容不動。
+    - 原因清單只有固定代號（TERM_NOT_A_SEMESTER、TERM_NOT_IN_DOCUMENT），不含 term 的內容。
+    呼叫前必須已通過 verify()（cite 索引與文件都存在）。
+    """
+    reasons: list[str] = []
+    deadlines = []
+    for d in response.deadlines:
+        if d.term is None:
+            deadlines.append(d)
+        elif not d.term.strip():
+            deadlines.append(d.model_copy(update={"term": None}))
+        else:
+            bodies = [docs[response.citations[i].doc_id].body for i in d.cite]
+            verdict = check_term(d.term, bodies)
+            if verdict == TERM_OK:
+                deadlines.append(d)
+            else:
+                reasons.append(verdict)
+                deadlines.append(d.model_copy(update={"term": None}))
+    return response.model_copy(update={"deadlines": deadlines}), reasons
 # 防護 4 結束

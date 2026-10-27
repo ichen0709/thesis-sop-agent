@@ -133,11 +133,11 @@ uv run python -m sop_agent.library
 |---|---|---|
 | 1 暫存資料夾 | `src/sop_agent/runner.py` | 125–147 |
 | 2 權限限制（旗標、移除金鑰環境變數） | `src/sop_agent/runner.py` | 34–76 |
-| 3 問題當資料（組 prompt、中和標記） | `src/sop_agent/prompt.py` | 14–77 |
+| 3 問題當資料（組 prompt、中和標記） | `src/sop_agent/prompt.py` | 14–81 |
 | 3 問題當資料（輸入驗證、階段白名單） | `src/sop_agent/ask.py` | 85–102 |
 | 4 輸出檢查（格式） | `src/sop_agent/schema.py` | 29–102 |
-| 4 輸出檢查（出處驗證） | `src/sop_agent/verify.py` | 15–112 |
-| 4 輸出檢查（解析、驗證、沒過改查不到卡） | `src/sop_agent/ask.py` | 138–153 |
+| 4 輸出檢查（出處驗證、「適用」欄 term 檢查） | `src/sop_agent/verify.py` | 16–162 |
+| 4 輸出檢查（解析、驗證、沒過改查不到卡） | `src/sop_agent/ask.py` | 138–163 |
 | 5 請求來源檢查與回應標頭 | `src/sop_agent/server.py` | 28–56、113–125 |
 | 5 請求本文大小限制 | `src/sop_agent/server.py` | 59–77 |
 | 5 伺服器端移除控制字元 | `src/sop_agent/cards.py` | 46–53 |
@@ -201,6 +201,14 @@ uv run python -m sop_agent.manual_check --fake-api-key
 有機會看到真的沒登入的輸出時，核對一次。
 
 ### 5. 完整流程（`--e2e`，階段 3 新增）
+
+只重跑前兩題（省額度，**呼叫 claude 2 次**）：
+
+```text
+uv run python -m sop_agent.manual_check --e2e --only 1,2
+```
+
+`--only` 接受題號（從 1 開始），例如 `--only 1,2`、`--only 4`；不給就是全部 4 題。
 
 ```text
 uv run python -m sop_agent.manual_check --e2e
@@ -302,3 +310,17 @@ uv run python tests/demo_server.py
 | 畫面上的 `<script>` 顯示為純文字（延自階段 1） | `test_web_static.py`、`test_web_js.py`（假 DOM）、`test_ask_api.py`（HTML 字串原樣回傳）、`test_web_safe.py` | 手動 1、2、3 |
 | 請求本文大小限制（config 的 `max_body_bytes`） | `test_ask_api.py`（超過、剛好等於、分段傳送沒有 Content-Length、由 config 決定） | — |
 | `--e2e` 只用測試文件、示範伺服器只綁 127.0.0.1 並套用來源檢查 | `test_demo_and_e2e.py` | — |
+
+
+## 「適用」欄與原文片段的規則（階段 3 後修正）
+
+- **term：** 模型填的「適用學期」要同時符合「像學年度或學期」和「出現在該條目引用的文件內文裡」；沒過只省略「適用」那一段，其他內容照常。紀錄檔只記 `term_not_a_semester`／`term_not_in_document`，不記內容。細節見 `docs/architecture.md` 第 6 節。
+- **prompt：** term 只有文件明確寫了學年度或學期才能填，否則填 `null`；引用的原文片段要是完整的一句或一個子句，不要在句子中間斷開。
+
+| 項目 | 測試 |
+|---|---|
+| term 在文件裡有／沒有／引用別份文件／空字串／`null` | `test_verify.py`（term 檢查一組）、`test_ask_api.py`（term 一組，含畫面上的「適用」） |
+| 在文件裡出現但不是學期的字串（「口試申請」「口試日前 14 日內」）被拿掉 | `test_verify.py`、`test_ask_api.py` |
+| 拿掉 term 不影響其他內容；紀錄只有固定代號、不含 term 內容 | `test_verify.py::test_dropping_a_term_changes_nothing_else`、`test_ask_api.py::test_dropped_term_content_is_never_written_to_the_log` |
+| prompt 有 term 與完整句子的規則 | `test_prompt.py` |
+| `--e2e --only` | `test_demo_and_e2e.py` |

@@ -21,7 +21,7 @@ from sop_agent.prompt import SYSTEM_PROMPT, build_prompt, validate_stage
 from sop_agent.runner import Runner, RunnerError
 from sop_agent.schema import SchemaError, extract_payload, parse_model_response
 from sop_agent.selector import SelectionStatus, select_documents
-from sop_agent.verify import verify
+from sop_agent.verify import TERM_NOT_A_SEMESTER, sanitize_terms, verify
 
 
 class StagesError(Exception):
@@ -150,6 +150,16 @@ class AskService:
         if not verified.ok:
             self._log.record(ErrorType.VERIFY_FAILED, Step.VERIFY)
             return message_card("no_info")
+        if response.status == "answered":
+            # 「適用」欄的 term 沒過就只省略「適用」那一段；紀錄只有固定代號，不記 term 內容
+            response, term_problems = sanitize_terms(response, docs)
+            for reason in term_problems:
+                code = (
+                    ErrorType.TERM_NOT_A_SEMESTER
+                    if reason == TERM_NOT_A_SEMESTER
+                    else ErrorType.TERM_NOT_IN_DOCUMENT
+                )
+                self._log.record(code, Step.VERIFY)
         # 防護 4 結束
 
         if response.status == "not_in_documents":

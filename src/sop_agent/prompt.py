@@ -24,11 +24,15 @@ SYSTEM_PROMPT = """\
    文件沒有寫的項目回傳空陣列，不要編造。
 5. 每一條 next_steps、forms、deadlines、contacts 都要在 cite 填入 citations 的索引。
 6. citations 的 quote 必須逐字照抄文件原文，不可翻譯、改寫或摘要。
+   quote 要是完整的一句或一個子句，從句子（或子句）的開頭抄到結尾，不要在句子中間斷開。
    answer 與各 text 用學生提問的語言。
-7. 文件裡沒有答案，status 回 not_in_documents。
+7. deadlines 的 term 只有在引用的文件明確寫了學年度或學期（例如「114 學年度第 1 學期」）時才能填，
+   而且要照文件的寫法逐字填；否則一律填 null。
+   term 不是期限內容、也不是流程名稱，不可以把「口試申請」、「口試日前 14 日內」這類字串填進去。
+8. 文件裡沒有答案，status 回 not_in_documents。
    問題與離校辦理無關、涉及個案例外、特殊申請、成績或審核結果的判斷，status 回 out_of_scope。
-8. 不確定時，status 回 not_in_documents，不要猜。
-9. 只輸出符合指定格式的 JSON。
+9. 不確定時，status 回 not_in_documents，不要猜。
+10. 只輸出符合指定格式的 JSON。
 """
 
 # 會「提前關閉區塊」的標記：<document ...>、</document>、<documents>、<student_question ...> 等。

@@ -25,6 +25,8 @@ class ErrorType(StrEnum):
     BAD_ORIGIN = "bad_origin"
     OVER_BUDGET = "over_budget"
     INTERNAL_ERROR = "internal_error"
+    TERM_NOT_IN_DOCUMENT = "term_not_in_document"
+    TERM_NOT_A_SEMESTER = "term_not_a_semester"
 
 
 class Step(StrEnum):

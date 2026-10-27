@@ -7,3 +7,4 @@ public: true
 ---
 注意事項：<script>alert("body-xss")</script> 請於口試前確認所有文件。
 <b>粗體標記</b>與 &lt;i&gt; 實體字元都要原樣顯示。
+<script>alert("evil")</script><img src=x onerror=alert(1)> 學期

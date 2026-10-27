@@ -142,3 +142,43 @@ def test_e2e_questions_run_through_the_service():
     assert len(runner.prompts) == len(manual_check.E2E_QUESTIONS) == 4
     assert len({q for _t, q, _s in manual_check.E2E_QUESTIONS}) == 4
     assert any(q.isascii() for _t, q, _s in manual_check.E2E_QUESTIONS)  # 有一題英文
+
+
+# --- --only：只跑指定題號，省額度 ---
+
+def test_only_runs_the_first_two_questions():
+    chosen = manual_check.select_e2e_questions("1,2")
+    assert chosen == manual_check.E2E_QUESTIONS[:2]
+    assert len(chosen) == 2
+
+
+def test_only_default_runs_all_questions():
+    assert manual_check.select_e2e_questions(None) == manual_check.E2E_QUESTIONS
+    assert manual_check.select_e2e_questions("") == manual_check.E2E_QUESTIONS
+
+
+def test_only_ignores_order_and_duplicates():
+    assert manual_check.select_e2e_questions("2,1,2") == manual_check.E2E_QUESTIONS[:2]
+    assert manual_check.select_e2e_questions("4") == [manual_check.E2E_QUESTIONS[3]]
+
+
+@pytest.mark.parametrize("bad", ["0", "5", "1,9", "a", "1,x", "-1"])
+def test_only_rejects_invalid_numbers(bad):
+    with pytest.raises(SystemExit):
+        manual_check.select_e2e_questions(bad)
+
+
+def test_the_first_two_e2e_questions_are_the_chinese_and_english_ones():
+    first_two = manual_check.select_e2e_questions("1,2")
+    assert not first_two[0][1].isascii()
+    assert first_two[1][1].isascii()
+
+
+def test_e2e_with_only_calls_the_model_only_that_many_times(monkeypatch, capsys):
+    runner = ScriptedRunner()
+    service = manual_check.build_e2e_service(runner)
+    monkeypatch.setattr(manual_check, "SubprocessRunner", lambda **kw: runner)
+    monkeypatch.setattr(manual_check, "build_e2e_service", lambda r, c=None: service)
+    assert manual_check.run_e2e("1,2") == 0
+    assert len(runner.prompts) == 2
+    assert "呼叫 claude 2 次" in capsys.readouterr().out

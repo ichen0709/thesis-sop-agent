@@ -11,3 +11,4 @@ stages: [口試前, 口試後]
 (1) 口試申請表 (2) 論文初稿。
 Applicants must submit the form
 to the department office.
+本規定適用於 114 學年度第 1 學期。

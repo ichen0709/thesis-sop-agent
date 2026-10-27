@@ -581,3 +581,105 @@ def test_fake_claude_failure_through_subprocess_runner(test_config, library, tmp
     card = ask(make_client(test_config, runner, library)).json()
     assert card == {"kind": "unavailable", "message": UNAVAILABLE_TEXT}
     assert ("not_logged_in", "run_claude") in logged(test_config)
+
+
+# --- 「適用」欄的 term：沒過只省略「適用」那一段，其他內容照常，紀錄只有固定代號 ---
+
+DEMO_ORAL_QUOTE = "口試申請應於口試日前14日內，備妥下列文件"
+DEMO_XSS_QUOTE = '<script>alert("body-xss")</script> 請於口試前確認所有文件'
+
+
+def term_payload(term, cite=(0,)):
+    return {
+        "status": "answered",
+        "answer": "請在口試日前 14 日內備妥文件。",
+        "next_steps": [],
+        "forms": [],
+        "deadlines": [{"text": "口試日前 14 日", "term": term, "cite": list(cite)}],
+        "contacts": [],
+        "citations": [
+            {"doc_id": "demo-oral-exam", "version_date": "2025-09-01", "quote": DEMO_ORAL_QUOTE},
+            {"doc_id": "demo-xss", "version_date": "2025-10-01", "quote": DEMO_XSS_QUOTE},
+        ],
+    }
+
+
+def deadline_text(card) -> str:
+    section = next(s for s in card["sections"] if s["title"] == "期限與窗口")
+    return next(i["text"] for i in section["items"] if i["label"] == "期限")
+
+
+def ask_term(test_config, term, cite=(0,)):
+    library = load_library(FIXTURES / "library_xss")
+    runner = FakeRunner(envelope(term_payload(term, cite)))
+    return ask(make_client(test_config, runner, library), stage=None).json()
+
+
+def test_term_in_the_cited_document_is_shown_and_nothing_is_logged(test_config):
+    card = ask_term(test_config, "114 學年度第 1 學期")
+    text = deadline_text(card)
+    assert "適用：114 學年度第 1 學期" in text and "2025-09-01 版" in text
+    assert logged(test_config) == []
+
+
+def test_term_not_in_the_document_only_omits_the_applies_part(test_config):
+    card = ask_term(test_config, "115 學年度第 2 學期")
+    assert card["kind"] == "answer"
+    text = deadline_text(card)
+    assert "適用" not in text and "115" not in text
+    assert text.startswith("口試日前 14 日") and "《口試辦理流程（示範用）》2025-09-01 版" in text  # 其他內容照常
+    assert card["answer"] == "請在口試日前 14 日內備妥文件。"
+    assert len(card["sources"]) == 2
+    assert logged(test_config) == [("term_not_in_document", "verify")]
+
+
+def test_term_that_is_only_in_another_cited_document_is_dropped(test_config):
+    # 「114 學年度第 1 學期」在 demo-oral-exam，但這個條目只引用 demo-xss（cite = [1]）
+    card = ask_term(test_config, "114 學年度第 1 學期", cite=(1,))
+    text = deadline_text(card)
+    assert "適用" not in text and "《" in text
+    assert logged(test_config) == [("term_not_in_document", "verify")]
+
+
+def test_term_in_one_of_two_cited_documents_is_shown(test_config):
+    card = ask_term(test_config, "114 學年度第 1 學期", cite=(0, 1))
+    assert "適用：114 學年度第 1 學期" in deadline_text(card)
+    assert logged(test_config) == []
+
+
+@pytest.mark.parametrize("term", ["口試申請", "口試日前 14 日內"])
+def test_text_that_is_in_the_document_but_is_not_a_semester_is_dropped(test_config, term):
+    card = ask_term(test_config, term)
+    text = deadline_text(card)
+    assert "適用" not in text
+    assert text.startswith("口試日前 14 日")
+    assert logged(test_config) == [("term_not_a_semester", "verify")]
+
+
+@pytest.mark.parametrize("term", ["", "   ", None])
+def test_empty_term_shows_no_applies_part_and_logs_nothing(test_config, term):
+    card = ask_term(test_config, term)
+    assert "適用" not in deadline_text(card)
+    assert logged(test_config) == []
+
+
+def test_dropped_term_content_is_never_written_to_the_log(test_config):
+    ask_term(test_config, "獨特的假學期 SECRET-TERM-4242 學期")
+    assert logged(test_config) == [("term_not_in_document", "verify")]
+    assert "SECRET-TERM-4242" not in test_config.log_path.read_text(encoding="utf-8")
+
+
+def test_each_dropped_term_is_logged_once_with_a_fixed_code(test_config):
+    payload = term_payload("115 學年度第 2 學期")
+    payload["deadlines"].append({"text": "另一個期限", "term": "口試申請", "cite": [0]})
+    payload["deadlines"].append({"text": "第三個期限", "term": "114 學年度第 1 學期", "cite": [0]})
+    library = load_library(FIXTURES / "library_xss")
+    ask(make_client(test_config, FakeRunner(envelope(payload)), library), stage=None)
+    assert logged(test_config) == [("term_not_in_document", "verify"), ("term_not_a_semester", "verify")]
+    for line in log_lines(test_config):
+        assert set(line) == {"time", "error", "step"}
+
+
+def test_a_dropped_term_does_not_turn_the_answer_into_a_not_found_card(test_config):
+    card = ask_term(test_config, "完全不存在的學期 學期")
+    assert card["kind"] == "answer"

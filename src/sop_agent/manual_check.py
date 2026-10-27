@@ -62,8 +62,22 @@ def build_e2e_service(runner: Runner, config: Config | None = None) -> AskServic
     return AskService(config, library, E2E_STAGES, runner, AppLog(config.log_path))
 
 
-def run_e2e() -> int:
-    """用真的 claude 跑完整流程（選文件→prompt→claude→驗證→卡片），問 4 題 = 呼叫 claude 4 次。"""
+def select_e2e_questions(only: str | None) -> list[tuple[str, str, str | None]]:
+    """only 例如 "1,2" = 只跑第 1、2 題（用來省額度）。不給 = 全部。題號從 1 開始。"""
+    if not only:
+        return list(E2E_QUESTIONS)
+    try:
+        numbers = sorted({int(x) for x in only.split(",") if x.strip()})
+    except ValueError:
+        raise SystemExit("--only 只接受題號，例如 --only 1,2") from None
+    if not numbers or any(n < 1 or n > len(E2E_QUESTIONS) for n in numbers):
+        raise SystemExit(f"--only 的題號必須在 1 到 {len(E2E_QUESTIONS)} 之間")
+    return [E2E_QUESTIONS[n - 1] for n in numbers]
+
+
+def run_e2e(only: str | None = None) -> int:
+    """用真的 claude 跑完整流程（選文件→prompt→claude→驗證→卡片）。每題 = 呼叫 claude 一次。"""
+    questions = select_e2e_questions(only)
     cfg = load_config()
     runner = SubprocessRunner(
         command=cfg.claude_command,
@@ -74,7 +88,8 @@ def run_e2e() -> int:
     )
     service = build_e2e_service(runner, cfg)
     print(f"文件庫：{E2E_LIBRARY}（測試文件，不是真的 library/）\n")
-    for title, question, stage in E2E_QUESTIONS:
+    print(f"這次會問 {len(questions)} 題 = 呼叫 claude {len(questions)} 次\n")
+    for title, question, stage in questions:
         q, st = service.validate(question, stage)
         card = service.ask(q, st)
         print(f"=== {title} | 階段：{st or '（未指定）'}\n問：{q}")
@@ -95,11 +110,13 @@ def main() -> int:
                     help="先在自己的環境設一個假的 ANTHROPIC_API_KEY，確認它沒被帶進 claude")
     ap.add_argument("--show-argv", action="store_true")
     ap.add_argument("--e2e", action="store_true",
-                    help="用測試文件跑完整流程，問 4 題（呼叫 claude 4 次）；不讀真的 library/")
+                    help="用測試文件跑完整流程，預設問 4 題（呼叫 claude 4 次）；不讀真的 library/")
+    ap.add_argument("--only", default=None,
+                    help="搭配 --e2e：只跑指定題號，例如 --only 1,2（只呼叫 claude 2 次，省額度）")
     args = ap.parse_args()
 
     if args.e2e:
-        return run_e2e()
+        return run_e2e(args.only)
 
     cfg = load_config()
     flags = ISOLATION[args.isolation] if args.isolation else list(cfg.isolation_flags)
