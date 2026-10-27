@@ -4,7 +4,7 @@
 // 防護 5 開始：前端安全寫入
 const ALLOWED_TAGS = new Set([
   "div", "span", "p", "ul", "li", "h2", "h3", "button",
-  "strong", "blockquote", "section", "label", "small",
+  "strong", "blockquote", "section", "label", "small", "option", "ol",
 ]);
 
 export function setText(element, text) {

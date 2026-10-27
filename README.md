@@ -6,7 +6,7 @@
 - 架構：`docs/architecture.md`
 - 開發規則：`CLAUDE.md`
 
-目前進度：**階段 1（防護）已完成，階段 2（文件庫）完成**。還沒有問答、流程圖或任何畫面。
+目前進度：階段 1（防護）、階段 2（文件庫）已 commit；**階段 3（問答畫面）已完成，等待驗收**。流程圖、文件清單、情境範例還沒做（階段 4、5）。
 
 ## 環境
 
@@ -25,13 +25,37 @@ uv run pytest
 
 全部使用假的 `claude`（`tests/fakes/fake_claude.py`），不花額度，約 15 秒。
 
-## 啟動伺服器骨架
+畫面邏輯（`web/app.js`）的測試用 Node 內建的測試執行器在假的 DOM 上執行（`tests/js/`，由 `tests/test_web_js.py` 呼叫）。
+Node 只是開發用工具；沒有安裝 Node 時這幾個測試會被略過，其餘照跑。
+
+## 啟動伺服器
 
 ```text
 uv run python -m sop_agent.server
 ```
 
-只綁定 `127.0.0.1:8000`。目前只有 `GET /api/health` 和還沒實作的 `POST /api/ask`。
+打開 <http://127.0.0.1:8000>。只綁定 `127.0.0.1`。
+
+- 啟動時載入文件庫一次，**換新版文件要重啟伺服器**。
+- 文件庫是空的，伺服器照常啟動（學生提問會看到「無法回答」訊息）；只有文件檔頭有錯才會停下來並列出檔名與問題。
+- 階段選單來自 `data/stages.json`。目前是占位內容（`"placeholder": true`），畫面上標「範例資料，非正式規定」；拿到系辦文件、決定階段後再換掉並改成 `false`。
+- 文件檔頭的 `stages` 有不在階段選單裡的名稱時，啟動時會印警告（那些文件選了階段後會選不到）。
+- 請求本文上限在 `config.toml` 的 `limits.max_body_bytes`（預設 8192），超過回 400，不呼叫模型。
+
+| 路徑 | 說明 |
+|---|---|
+| `GET /` | 問答頁 |
+| `GET /api/meta` | 階段選單、文件庫最後更新日期、字數上限、固定文字 |
+| `POST /api/ask` | `{"question": "...", "stage": "口試前" 或 null}` → 四種卡片之一（`answer`、`no_info`、`out_of_scope`、`unavailable`），都回 200；輸入不合格回 400；來源不符回 403 |
+
+## 示範伺服器（不花額度）
+
+```text
+uv run python tests/demo_server.py
+```
+
+假的 claude ＋ 假文件（`tests/fixtures/library_xss/`），只綁 `127.0.0.1`，套用和正式伺服器同一個 `create_app`（同樣的 Host/Origin 檢查與 CSP）。
+在問題裡打關鍵字會得到不同的結果，啟動時會印出完整對照。紀錄檔寫到暫存資料夾，不寫進專案的 `logs/`。
 
 ## 文件庫
 
@@ -109,11 +133,16 @@ uv run python -m sop_agent.library
 |---|---|---|
 | 1 暫存資料夾 | `src/sop_agent/runner.py` | 125–147 |
 | 2 權限限制（旗標、移除金鑰環境變數） | `src/sop_agent/runner.py` | 34–76 |
-| 3 問題當資料 | `src/sop_agent/prompt.py` | 14–77 |
+| 3 問題當資料（組 prompt、中和標記） | `src/sop_agent/prompt.py` | 14–77 |
+| 3 問題當資料（輸入驗證、階段白名單） | `src/sop_agent/ask.py` | 85–102 |
 | 4 輸出檢查（格式） | `src/sop_agent/schema.py` | 29–102 |
 | 4 輸出檢查（出處驗證） | `src/sop_agent/verify.py` | 15–112 |
-| 5 請求來源檢查與回應標頭 | `src/sop_agent/server.py` | 18–46、60–72 |
+| 4 輸出檢查（解析、驗證、沒過改查不到卡） | `src/sop_agent/ask.py` | 138–153 |
+| 5 請求來源檢查與回應標頭 | `src/sop_agent/server.py` | 28–56、113–125 |
+| 5 請求本文大小限制 | `src/sop_agent/server.py` | 59–77 |
+| 5 伺服器端移除控制字元 | `src/sop_agent/cards.py` | 46–53 |
 | 5 前端安全寫入 | `web/safe.js` | 4–29 |
+| 5 畫面只用 safe.js 寫入 | `web/app.js` | 16–80 |
 
 `tests/test_protection_markers.py` 會檢查五項標記都在、開始與結束成對，也會檢查沒有關閉防護的開關。
 
@@ -171,9 +200,46 @@ uv run python -m sop_agent.manual_check --fake-api-key
 `runner.py` 的 `_classify_failure` 是用關鍵字猜「沒登入」，關鍵字還沒用真的輸出確認。
 有機會看到真的沒登入的輸出時，核對一次。
 
-### 這一階段無法測的項目
+### 5. 完整流程（`--e2e`，階段 3 新增）
 
-「畫面上的 `<script>` 顯示為純文字」需要真正的問答畫面，延到階段 3。階段 1 只有 `innerHTML` 掃描（`tests/test_web_safe.py`）和 `web/safe.js`。
+```text
+uv run python -m sop_agent.manual_check --e2e
+```
+
+用**測試文件**（`tests/fixtures/library_ok/`，永遠不讀真的 `library/`）跑完整流程：選文件 → prompt → claude → 驗證 → 卡片。問 4 題，**呼叫 claude 4 次**：
+
+| 題目 | 階段 | 預期 |
+|---|---|---|
+| 口試申請表要在什麼時候送？要送到哪裡？ | 口試前 | 答案卡，出處片段是文件原文 |
+| When must I submit the oral exam application form, and where? | 口試前 | 英文答案；出處片段維持文件原本的中文並通過驗證 |
+| 今天台北的天氣如何？ | （不指定） | 範圍外卡 |
+| 口試委員的車馬費是多少？ | 口試前 | 查不到卡 |
+
+估計用量：每次約 3,000 到 4,000 token（階段 1 實測約 2,400，加上測試文件），合計約 1.2 萬到 1.6 萬 token。
+這是人工觀察，不是通過／失敗判斷，因為模型每次的回答可能不同。紀錄檔寫到暫存資料夾。
+
+## 手動檢查（示範伺服器，不花額度）
+
+自動測試涵蓋了伺服器端的內容和（在假 DOM 上的）畫面邏輯，但沒有真正的瀏覽器。請在瀏覽器裡親自確認：
+
+```text
+uv run python tests/demo_server.py
+```
+
+打開 <http://127.0.0.1:8000>，依序做：
+
+1. **XSS：** 在問題輸入 `<script>alert(1)</script><img src=x onerror=alert(1)>` 後送出。預期：問題顯示成純文字、沒有彈出視窗。
+2. **XSS（回答端）：** 問 `xss 測試`。預期：回答、下一步、相關表單、期限（含「適用」）、窗口、出處標題、原文片段，所有欄位的 `<script>`、`<img onerror>` 都顯示成純文字，沒有彈窗。
+3. **CSP：** 開瀏覽器 DevTools 的 Console（F12）。預期：沒有 Content Security Policy 違規訊息，也沒有其他紅字錯誤。
+4. **四種卡片：** 分別問「口試申請表什麼時候送」（答案卡）、`今天天氣`（範圍外卡）、`這題查不到`（查不到卡）、`伺服器壞掉`（「無法回答」訊息）。預期：樣式不同、文字不同，查不到卡與範圍外卡沒有四個欄位。
+5. **等待提示：** 問 `慢`。預期：送出後按鈕停用、輸入框停用、出現轉圈圈與「正在查文件…」，約 4 秒後恢復。
+6. **字數：** 貼上超過 500 字的文字。預期：送出鈕停用、旁邊出現「問題太長，請縮短」；刪到 500 字以內恢復。空白也不能送出。
+7. **階段：** 不選階段問一般問題 → 答案卡最上面有「你還沒選目前階段，以下回答是依整個流程的文件整理的」；選「口試前」再問 → 沒有這句。選「離校」再問 → 查不到卡（假 claude 引用了沒放進這次 prompt 的文件，被驗證擋下來）。階段選單旁有「範例資料，非正式規定」。
+8. **版面與提示：** 輸入框旁有「每次提問是獨立的，請把完整情況寫在問題裡」；最上面標題下方有免責提示；最底下（輸入區下面）有「文件庫最後更新日期：2025-10-01」；重新整理後問答清空。
+9. **問 5 題以上後，輸入區仍在畫面下方：** 連續問 5 題以上（問 `慢` 以外的任何問題，可以多問幾次 `xss 測試` 讓卡片變長）。預期：**階段選單、輸入框、送出鈕一直都在畫面下方看得到**，不需要捲到最上面；整個頁面本身不會捲動，只有中間的問答紀錄自己捲動。
+10. **自動捲到新問答的開頭：** 問一個長答案（`xss 測試`）。預期：畫面捲到「那一則」問答的開頭（先看到你的問題，再看到答案卡的開頭），不是捲到最底；答案比紀錄區高時，仍然從開頭看起。用滑鼠往上捲可以看到之前的問答。
+11. **窄螢幕與手機寬度：** 把瀏覽器視窗縮窄到約 360px（或 F12 的手機模式，例如 iPhone SE／Pixel）。預期：整頁**沒有橫向捲動**；輸入區仍在下方、階段選單看得到；長字串（例如貼一段很長的網址當問題）會換行，不會把版面撐寬；可以正常輸入與送出。
+12. **矮視窗：** 把視窗高度縮到約 480px。預期：輸入區仍完整可用，問答紀錄區變小但還能捲動（空間會比較緊，這是預期的）。
 
 ## 驗證清單（架構文件第 15 節，步驟 1）對應的測試
 
@@ -212,3 +278,27 @@ uv run python -m sop_agent.manual_check --fake-api-key
 | 沒選階段放全部 | `test_selector.py::test_no_stage_selects_all_loaded_documents`、`test_empty_string_stage_means_no_stage` |
 | 與階段 1 銜接：登記表核對 `doc_id`、`version_date` 與內文（檔頭不算內文） | `test_selector.py` 最後一組（`test_selection_by_id_feeds_verify_and_a_body_quote_passes` 等） |
 | 其他：`id` 與檔名一致、`id` 不重複、封存資料夾不讀、沒有檔頭、BOM／CRLF、錯誤訊息不含檔案內容 | `test_library.py` |
+
+## 驗證清單（架構文件第 15 節，步驟 3：問答）對應的測試
+
+「假 DOM」指 `tests/js/app_flow.test.mjs`，在假的 DOM 上實際執行 `web/app.js`（需要 Node）。「手動」指上面的「手動檢查（示範伺服器）」。
+
+| 項目 | 自動 | 手動 |
+|---|---|---|
+| 空白不能送出；501 字不能送出（前端和直接打 API 都擋） | API：`test_ask_api.py`（空白、500 字通過、501 字拒絕、不呼叫模型、字元計算）；前端：假 DOM（空白、500、501、表情符號、直接觸發送出） | 手動 6 |
+| 送出後按鈕停用並顯示「正在查文件…」，回來後恢復 | 假 DOM（停用、顯示、恢復、失敗後也恢復、處理中再送被忽略） | 手動 5 |
+| 回答卡四欄俱全，沒寫的欄位顯示「文件未載明」 | `test_cards.py`（四欄、整欄缺、只缺期限或窗口）；假 DOM（畫出來） | 手動 4 |
+| 出處欄顯示「文件名稱（版本日期）」和原文片段 | `test_cards.py`；`test_ask_api.py`（片段是文件原文、含換行）；假 DOM | 手動 4 |
+| 期限旁標示適用學期與引用文件的版本日期 | `test_cards.py`（有學期、沒學期、兩份文件、空白學期） | 手動 4 |
+| 沒選階段顯示提醒，選了不顯示 | `test_cards.py`、`test_ask_api.py`；假 DOM | 手動 7 |
+| 模型回 `not_in_documents` 顯示查不到卡；回 `out_of_scope` 顯示範圍外卡；文字不同 | `test_cards.py`、`test_ask_api.py`；假 DOM | 手動 4 |
+| 逾時、沒登入、找不到 claude、忙碌：「無法回答」訊息，沒有技術細節 | `test_ask_api.py`（四種錯誤、忙碌、未預期的例外、`library_empty`、`over_budget`、訊息不含技術字眼）；假 DOM（連線失敗） | 手動 4 |
+| 每次提問獨立：第二次的 prompt 沒有第一次的問答 | `test_ask_api.py::test_each_question_is_independent` | 手動 8（舊問答可往上捲） |
+| 輸入框旁有「每次提問是獨立的，請把完整情況寫在問題裡」 | `test_cards.py`、`test_ask_api.py`（/api/meta）；假 DOM（畫面上有這句） | 手動 8 |
+| 版面：輸入區（階段選單、輸入框、送出鈕、提示）固定在下方，問答紀錄獨立捲動，整頁不捲動 | `test_web_static.py`（區塊順序、輸入區內容、紀錄區 `overflow-y: auto`、`100dvh`、沒有 sticky／fixed）；另外我用 Edge 無頭模式量過實際版面（見下） | 手動 9 |
+| 新問答出現後捲到「那一則」的開頭，不是最底 | 假 DOM（`block: "start"`、問題加入與卡片加入各對齊一次、不捲整個紀錄區）；`test_web_static.py`（沒有 `scrollHeight`／`scrollTop`／`block: "end"`） | 手動 10 |
+| 窄螢幕與手機寬度沒有橫向捲動 | `test_web_static.py`（長字串換行規則、沒有固定大寬度、viewport meta）；Edge 無頭實測 300／320／360／390px | 手動 11、12 |
+| 英文提問，答案是英文，片段維持原語言並通過驗證 | `test_ask_api.py`（片段以文件原文顯示、通過驗證；答案語言由模型決定，無法自動測） | **`--e2e` 第 2 題（真的 claude）** |
+| 畫面上的 `<script>` 顯示為純文字（延自階段 1） | `test_web_static.py`、`test_web_js.py`（假 DOM）、`test_ask_api.py`（HTML 字串原樣回傳）、`test_web_safe.py` | 手動 1、2、3 |
+| 請求本文大小限制（config 的 `max_body_bytes`） | `test_ask_api.py`（超過、剛好等於、分段傳送沒有 Content-Length、由 config 決定） | — |
+| `--e2e` 只用測試文件、示範伺服器只綁 127.0.0.1 並套用來源檢查 | `test_demo_and_e2e.py` | — |

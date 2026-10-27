@@ -21,6 +21,7 @@ result_fields = ["structured_output"]
 max_question_chars = 500    # 暫定
 max_prompt_chars = 0        # 待決定，等拿到文件量過再填
 min_quote_chars = 8         # 暫定
+max_body_bytes = 8192       # 請求本文上限（位元組），超過回 400，不呼叫模型
 
 [paths]
 library = "library"

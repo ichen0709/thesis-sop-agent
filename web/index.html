@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>研究生離校 SOP 問答</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1>研究生離校 SOP 問答</h1>
+      <p id="disclaimer" class="disclaimer"></p>
+    </header>
+
+    <main id="log" class="log" aria-label="問答紀錄">
+      <div id="history" class="history" aria-live="polite"></div>
+    </main>
+
+    <section class="composer" aria-label="提問">
+      <div class="stage-row">
+        <label id="stage-label" for="stage"></label>
+        <select id="stage"></select>
+        <span id="stage-placeholder" class="badge" hidden></span>
+      </div>
+
+      <form id="form" class="ask-form" autocomplete="off">
+        <label id="question-label" class="sr-only" for="question"></label>
+        <textarea id="question" rows="3"></textarea>
+        <p id="hint" class="hint"></p>
+        <p id="length-message" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button id="send" type="submit" disabled></button>
+          <span id="waiting" class="waiting" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="waiting-text"></span>
+          </span>
+        </div>
+      </form>
+    </section>
+
+    <footer class="bottom">
+      <p id="library-updated"></p>
+    </footer>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

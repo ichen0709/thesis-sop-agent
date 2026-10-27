@@ -50,4 +50,5 @@ def test_config(tmp_path) -> Config:
         library_dir=tmp_path / "library",
         data_dir=tmp_path / "data",
         log_path=tmp_path / "logs" / "app.log",
+        max_body_bytes=8192,
     )

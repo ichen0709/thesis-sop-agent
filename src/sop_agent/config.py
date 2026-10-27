@@ -29,6 +29,7 @@ class Config:
     library_dir: Path
     data_dir: Path
     log_path: Path
+    max_body_bytes: int = 8192
 
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
@@ -64,6 +65,10 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
     if not isinstance(min_quote, int) or min_quote <= 0:
         raise ConfigError("limits.min_quote_chars 必須大於 0")
 
+    max_body = limits.get("max_body_bytes", 8192)
+    if not isinstance(max_body, int) or max_body <= 0:
+        raise ConfigError("limits.max_body_bytes 必須大於 0")
+
     return Config(
         host=host,
         port=port,
@@ -78,4 +83,5 @@ def load_config(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         library_dir=root / paths.get("library", "library"),
         data_dir=root / paths.get("data", "data"),
         log_path=root / paths.get("log", "logs/app.log"),
+        max_body_bytes=max_body,
     )

@@ -44,7 +44,7 @@ def test_no_origin_is_allowed(client):
 
 def test_same_origin_is_allowed(client):
     r = client.post("/api/ask", headers={"Origin": BASE})
-    assert r.status_code == 501  # 通過檢查，只是還沒實作
+    assert r.status_code == 400  # 通過來源檢查；只是沒有合法的本文
 
 
 def test_localhost_host_and_origin_are_allowed(client):
@@ -52,7 +52,7 @@ def test_localhost_host_and_origin_are_allowed(client):
         "/api/ask",
         headers={"Host": "localhost:8000", "Origin": "http://localhost:8000"},
     )
-    assert r.status_code == 501
+    assert r.status_code == 400  # 通過來源檢查；只是沒有合法的本文
 
 
 def test_host_without_port_is_allowed(client):

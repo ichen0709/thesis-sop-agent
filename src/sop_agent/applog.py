@@ -23,9 +23,12 @@ class ErrorType(StrEnum):
     LIBRARY_EMPTY = "library_empty"
     BUSY = "busy"
     BAD_ORIGIN = "bad_origin"
+    OVER_BUDGET = "over_budget"
+    INTERNAL_ERROR = "internal_error"
 
 
 class Step(StrEnum):
+    SELECT_DOCS = "select_docs"
     RUN_CLAUDE = "run_claude"
     PARSE = "parse"
     VERIFY = "verify"
