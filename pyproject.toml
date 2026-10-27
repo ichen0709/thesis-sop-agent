@@ -5,6 +5,7 @@ description = "企管系研究生離校 SOP 問答 agent"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.162.0",
+    "pyyaml>=6.0.3",
     "uvicorn>=0.54.0",
 ]
 
