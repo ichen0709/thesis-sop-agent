@@ -437,7 +437,7 @@ thesis-sop-agent/
 - [x] （手動，已完成）在實際環境確認旗標組合的效果。結果：不隔離約 3,697 token；單用 `--restricted` 約 2,654 token 且多一個回合；`--setting-sources` 空字串、`project`，以及 `--restricted` 加空字串，都約 2,390 token、2 回合。使用者設定約佔 1,300 token，被 `--setting-sources ""` 擋掉。採用 `--restricted` 加 `--setting-sources ""`。
 - [x] （手動，已完成）確認外層結果裡模型內容的欄位：用 `structured_output`（物件），不用 `result` 字串。
 - [ ] （手動，尚未驗證）沒登入時 `claude -p` 的實際錯誤訊息，核對 `runner.py` 的 `_classify_failure` 關鍵字是否抓得到。
-- [ ] （手動，尚未驗證）假的 `ANTHROPIC_API_KEY` 不會被帶進子行程的實機確認（自動測試已涵蓋行程環境）。
+- [x] （手動，已驗證，通過）假的 `ANTHROPIC_API_KEY` 不會被帶進子行程。結果：環境裡放假金鑰、用真的 claude 執行，照常回答，`is_error` 為 false，沒有認證錯誤。
 - [ ] 啟動子行程時，環境變數中沒有 `ANTHROPIC_API_KEY`（先在本機設一個假值再測）。
 - [ ] 子行程的工作目錄是空的暫存資料夾；結束後該資料夾已刪除；失敗時也已刪除。
 - [ ] 問題不出現在子行程的命令列參數裡，只在 stdin。
@@ -545,7 +545,6 @@ thesis-sop-agent/
 ### 技術上要實測或調整
 
 - 沒登入時的實際錯誤訊息（尚未驗證；目前 `_classify_failure` 的關鍵字是猜的）。
-- 假的 `ANTHROPIC_API_KEY` 的實機確認（尚未驗證）。
 - 用哪個模型。
 - 逾時秒數、最低片段字數、字數上限（目前都是暫定值）。
 - 格式不對時要不要自動重試。

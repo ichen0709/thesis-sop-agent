@@ -87,7 +87,7 @@ uv run python -m sop_agent.manual_check --answerable
 
 **結果（已完成）：** 用 `structured_output`（物件），不用外層的 `result` 字串。已寫入 `config.toml` 的 `claude.result_fields`。
 
-### 3. 金鑰環境變數確實被移除（尚未驗證）
+### 3. 金鑰環境變數確實被移除（已驗證，通過）
 
 ```text
 uv run python -m sop_agent.manual_check --fake-api-key
@@ -95,6 +95,8 @@ uv run python -m sop_agent.manual_check --fake-api-key
 
 這個指令會在自己的環境放一個假的 `ANTHROPIC_API_KEY`。預期：照常回答。
 如果出現 invalid API key 之類的錯誤，代表假金鑰被帶進了 `claude`，要回頭查 `runner.py` 的 `build_env`。
+
+**結果（已驗證，通過）：** 用真的 claude 執行，照常回答，`is_error` 為 false，沒有認證錯誤，代表假金鑰沒有被帶進子行程。
 
 ### 4. 沒登入時的錯誤訊息（尚未驗證）
 
@@ -125,4 +127,5 @@ uv run python -m sop_agent.manual_check --fake-api-key
 | 格式不對、缺欄位、型別錯 | `test_schema.py` |
 | 紀錄檔只有時間、類型、步驟，無問題內容、設定值、本機路徑 | `test_applog.py`、`test_server_guard.py` |
 | 手動（已完成）：旗標組合效果、`--setting-sources`、外層欄位名稱 | 上面的「手動檢查」1、2 |
-| 手動（尚未驗證）：假金鑰實機確認、沒登入的錯誤訊息 | 上面的「手動檢查」3、4 |
+| 手動（已驗證，通過）：假金鑰實機確認 | 上面的「手動檢查」3 |
+| 手動（尚未驗證）：沒登入的錯誤訊息 | 上面的「手動檢查」4 |
