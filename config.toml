@@ -1,0 +1,28 @@
+# 設定檔：不放任何金鑰或個人資料。
+
+[server]
+host = "127.0.0.1"          # 只能是 127.0.0.1，其他值啟動時會報錯
+port = 8000                 # 暫定
+
+[model]
+name = ""                   # 空字串 = 用 Claude Code 的預設；用哪個模型待決定
+timeout_seconds = 120       # 暫定
+
+[claude]
+command = ["claude"]
+# 隔離使用者設定（hooks、外掛）用的旗標。手動檢查的結論，見 README。
+# 單用 --restricted 比較貴而且多一個回合；--setting-sources "" 擋掉約 1,300 token 的使用者設定。
+isolation_flags = ["--restricted", "--setting-sources", ""]
+# claude --output-format json 的外層結果裡，模型內容所在的欄位（物件）。
+# 實測結論：用 structured_output，不用外層 result 字串。
+result_fields = ["structured_output"]
+
+[limits]
+max_question_chars = 500    # 暫定
+max_prompt_chars = 0        # 待決定，等拿到文件量過再填
+min_quote_chars = 8         # 暫定
+
+[paths]
+library = "library"
+data = "data"
+log = "logs/app.log"
