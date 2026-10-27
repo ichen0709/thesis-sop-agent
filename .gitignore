@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# env files (allow template)
+.env.*
+!.env.example
+
+# raw documents (private, from department office)
+raw_docs/
