@@ -1,0 +1,17 @@
+{
+  "phones": [
+    {"number": "03-890-3012", "for": ["碩專 MBA", "國際生（Int'l students）"]},
+    {"number": "03-890-3013", "for": ["碩士班（Master Program）", "博士班（Ph.D. Program）"]}
+  ],
+  "emails": [
+    {"address": "ibm@gms.ndhu.edu.tw", "unit": "企研所"},
+    {"address": "gslm@gms.ndhu.edu.tw", "unit": "運籌管理研究所"}
+  ],
+  "location": "管理學院 A205 室",
+  "office_hours": "",
+  "sources": [
+    "https://ibm.ndhu.edu.tw/?Lang=zh-tw",
+    "https://gslm.ndhu.edu.tw/"
+  ],
+  "checked_on": "2026-11-02"
+}

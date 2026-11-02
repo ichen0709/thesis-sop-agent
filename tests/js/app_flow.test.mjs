@@ -334,3 +334,69 @@ test("輸入框的 placeholder 來自伺服器，輸入區的元素都還在", a
   assert.equal(app.el["question"].placeholder, "你的問題");
   for (const id of ["stage", "question", "send", "hint"]) assert.ok(app.el[id], id);
 });
+
+// ---- 聯絡方式 ----
+const CONTACT = {
+  title: "系所聯絡方式", hint: "（請依你的班別或所屬單位選擇）",
+  lines: ["電話 03-111-0001：甲班、乙班（Class B）", "電子郵件 a@example.test：甲單位", "地點：測試樓 101 室"],
+  checked: "聯絡資訊取自系所官網，查閱日期 2026-01-02",
+};
+
+test("三種訊息卡：有聯絡資料就列出每一行與查閱日期，全是純文字", async () => {
+  for (const [kind, message, cls] of [
+    ["no_info", "文件中沒有這項資訊，請洽系辦。", "card warn"],
+    ["out_of_scope", "這類問題不在服務範圍內，請洽系辦。", "card warn"],
+    ["unavailable", "現在無法回答，請稍後再試，或直接洽系辦。", "card unavailable"],
+  ]) {
+    const app = await boot({ askHandler: async () => jsonResponse({ kind, message, contact: CONTACT }) });
+    typeText(app, "一題"); submit(app); await settle();
+    const card = walk(app.el["history"]).find((n) => n.className === cls);
+    assert.ok(card, kind);
+    const text = card.textContent;
+    assert.ok(text.includes(message));
+    assert.ok(text.includes("系所聯絡方式") && text.includes("（請依你的班別或所屬單位選擇）"));
+    for (const line of CONTACT.lines) assert.ok(text.includes(line), line);
+    assert.ok(text.includes(CONTACT.checked));
+    for (const n of walk(card)) assert.notEqual(n.tagName, "a"); // 不做連結
+  }
+});
+
+test("沒有聯絡資料：訊息卡跟原本一樣，只有那一句", async () => {
+  const app = await boot({ askHandler: async () => jsonResponse({ kind: "no_info", message: "文件中沒有這項資訊，請洽系辦。" }) });
+  typeText(app, "一題"); submit(app); await settle();
+  const card = walk(app.el["history"]).find((n) => n.className === "card warn");
+  assert.equal(card.textContent, "文件中沒有這項資訊，請洽系辦。");
+});
+
+test("含 HTML 的聯絡字串只會變成文字", async () => {
+  const evil = '<script>alert("evil")</script><img src=x onerror=alert(1)>';
+  const contact = { title: evil, hint: evil, lines: [evil], checked: evil };
+  const app = await boot({ askHandler: async () => jsonResponse({ kind: "no_info", message: "請洽系辦", contact }) });
+  typeText(app, "一題"); submit(app); await settle();
+  for (const n of walk(app.el["history"])) {
+    assert.ok(!["script", "img", "iframe", "a", "style", "object"].includes(n.tagName), n.tagName);
+  }
+  assert.ok(allText(app.el["history"]).split(evil).length - 1 >= 4);
+});
+
+test("連不上伺服器：「無法回答」卡用載入時 /api/meta 拿到的聯絡資料", async () => {
+  const app = await boot({ meta: { ...META, contact: CONTACT },
+    askHandler: async () => { throw new Error("Failed to fetch"); } });
+  typeText(app, "一題"); submit(app); await settle();
+  const text = allText(app.el["history"]);
+  assert.ok(text.includes(META.unavailable_text));
+  for (const line of CONTACT.lines) assert.ok(text.includes(line), line);
+  assert.ok(!text.includes("Failed to fetch"));
+
+  const app2 = await boot({ meta: { ...META, contact: CONTACT },
+    askHandler: async () => jsonResponse({ error: "forbidden" }, false) });
+  typeText(app2, "一題"); submit(app2); await settle();
+  assert.ok(allText(app2.el["history"]).includes(CONTACT.lines[0]));
+});
+
+test("連不上伺服器且 meta 沒有聯絡資料：只顯示「無法回答」那句", async () => {
+  const app = await boot({ meta: { ...META, contact: null }, askHandler: async () => { throw new Error("x"); } });
+  typeText(app, "一題"); submit(app); await settle();
+  const card = walk(app.el["history"]).find((n) => n.className === "card unavailable");
+  assert.equal(card.textContent, META.unavailable_text);
+});

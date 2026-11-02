@@ -87,6 +87,13 @@ h1 { font-size: 1.25rem; margin: 0 0 4px; }
 }
 .card.warn { background: var(--warn-bg); border-color: var(--warn-border); }
 .card.unavailable { background: var(--bad-bg); border-color: var(--bad-border); }
+.card .message { margin: 0; }
+.contact { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.contact h3 { font-size: 0.95rem; margin: 0 0 4px; }
+.contact .contact-hint { font-weight: 400; color: var(--muted); margin-left: 4px; }
+.contact ul { margin: 0; padding-left: 1.3em; }
+.contact li { margin: 2px 0; overflow-wrap: anywhere; }
+.contact .contact-checked { display: block; margin-top: 6px; color: var(--muted); font-size: 0.8rem; }
 .notice { background: var(--notice-bg); border-radius: 6px; padding: 8px 10px; margin: 0 0 10px; font-size: 0.92rem; }
 .answer-text { margin: 0 0 12px; white-space: pre-wrap; font-size: 1.02rem; }
 

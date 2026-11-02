@@ -22,6 +22,7 @@ import uvicorn  # noqa: E402
 from sop_agent.applog import ErrorType  # noqa: E402
 from sop_agent.ask import Stages, print_startup_notes  # noqa: E402
 from sop_agent.config import load_config  # noqa: E402
+from sop_agent.contact import load_contact  # noqa: E402
 from sop_agent.library import load_library  # noqa: E402
 from sop_agent.runner import RunnerError  # noqa: E402
 from sop_agent.server import create_app  # noqa: E402
@@ -105,6 +106,7 @@ HELP = """\
   格式          模型回傳格式不對 → 查不到卡（不顯示原因）
   偽造          引用的片段是編的 → 驗證失敗 → 查不到卡
   壞掉          逾時 → 「無法回答」訊息
+  （查不到、範圍外、無法回答三種卡下方會有「系所聯絡方式」，取自 data/contact.json）
   未載明        答案卡，下一步、表單、期限都顯示「文件未載明」
 選階段「離校」再問一般問題：這個階段沒有放口試文件進 prompt，但假 claude 仍引用它，
   出處驗證會擋下來 → 查不到卡（可以看到「引用沒放進這次 prompt 的文件」會被拒絕）。
@@ -119,8 +121,9 @@ def main() -> int:
     config = dataclasses.replace(config, log_path=Path(log_dir) / "app.log")  # 不寫進專案的 logs/
     library = load_library(DEMO_LIBRARY)
     stages = Stages(names=("口試前", "口試後", "論文上傳", "離校"), placeholder=True)
-    print_startup_notes(library, stages)
-    app = create_app(config, runner=DemoRunner(), library=library, stages=stages)
+    contact = load_contact(config.data_dir)  # 用正式的 data/contact.json，才看得到真的聯絡區塊
+    print_startup_notes(library, stages, contact)
+    app = create_app(config, runner=DemoRunner(), library=library, stages=stages, contact=contact)
     print(HELP.format(port=config.port))
     uvicorn.run(app, host="127.0.0.1", port=config.port)  # 只綁 127.0.0.1
     return 0

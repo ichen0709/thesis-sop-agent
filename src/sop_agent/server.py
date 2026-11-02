@@ -2,7 +2,7 @@
 
 路徑：
 - GET  /api/health  健康檢查
-- GET  /api/meta    給前端的設定（階段選單、文件庫最後更新日期、字數上限、固定文字）
+- GET  /api/meta    給前端的設定（階段選單、文件庫最後更新日期、字數上限、固定文字、聯絡方式）
 - POST /api/ask     問答；四種卡片都回 200，輸入不合格回 400，來源不符回 403
 """
 
@@ -19,8 +19,9 @@ from starlette.concurrency import run_in_threadpool
 
 from sop_agent.applog import AppLog, ErrorType, Step
 from sop_agent.ask import AskService, InputError, Stages, load_stages, print_startup_notes
-from sop_agent.cards import DISCLAIMER, UI_TEXT, UNAVAILABLE_TEXT
+from sop_agent.cards import DISCLAIMER, UI_TEXT, UNAVAILABLE_TEXT, contact_block
 from sop_agent.config import PROJECT_ROOT, Config, load_config
+from sop_agent.contact import ContactLoad, load_contact
 from sop_agent.library import Library, LibraryError, load_library
 from sop_agent.runner import Runner, SubprocessRunner
 from sop_agent.schema import json_schema_text
@@ -97,13 +98,15 @@ def create_app(
     web_dir: Path | None = None,
     library: Library | None = None,
     stages: Stages | None = None,
+    contact: ContactLoad | None = None,
 ) -> FastAPI:
     config = config or load_config()
     library = library if library is not None else load_library(config.library_dir)
     stages = stages if stages is not None else load_stages(config.data_dir)
+    contact = contact if contact is not None else load_contact(config.data_dir)
     runner = runner if runner is not None else default_runner(config)
     log = AppLog(config.log_path)
-    service = AskService(config, library, stages, runner, log)
+    service = AskService(config, library, stages, runner, log, contact.contact)
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.runner = runner
@@ -138,6 +141,7 @@ def create_app(
             "disclaimer": DISCLAIMER,
             "unavailable_text": UNAVAILABLE_TEXT,  # 連不上伺服器時前端顯示的訊息
             "text": UI_TEXT,
+            "contact": contact_block(contact.contact),  # 連不上 /api/ask 時前端也用得到
         }
 
     @app.post("/api/ask")
@@ -179,8 +183,9 @@ def main() -> int:
             print(f"  {name}：{problem}", file=sys.stderr)
         return 1
     stages = load_stages(config.data_dir)
-    print_startup_notes(library, stages)
-    uvicorn.run(create_app(config, library=library, stages=stages), host=config.host, port=config.port)
+    contact = load_contact(config.data_dir)
+    print_startup_notes(library, stages, contact)
+    uvicorn.run(create_app(config, library=library, stages=stages, contact=contact), host=config.host, port=config.port)
     return 0
 
 

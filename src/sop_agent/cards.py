@@ -10,6 +10,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from sop_agent.contact import Contact
 from sop_agent.schema import ModelResponse, SourceDoc
 
 # 免責提示：單一常數。確切用詞還沒和系辦確認。
@@ -26,6 +27,10 @@ SECTION_NEXT_STEPS = "下一步"
 SECTION_FORMS = "相關表單"
 SECTION_DEADLINE_CONTACT = "期限與窗口"
 SECTION_SOURCES = "出處"
+
+CONTACT_TITLE = "系所聯絡方式"
+CONTACT_HINT = "（請依你的班別或所屬單位選擇）"
+CONTACT_CHECKED_PREFIX = "聯絡資訊取自系所官網，查閱日期 "
 
 # 網頁上的固定文字，由 /api/meta 提供給前端。
 UI_TEXT: dict[str, str] = {
@@ -53,14 +58,41 @@ def clean_text(text: str) -> str:
 # 防護 5 結束
 
 
-def message_card(kind: str) -> dict[str, Any]:
-    """查不到卡、範圍外卡、無法回答訊息。"""
+# 防護 5 開始：聯絡方式的文字也過 clean_text；純文字，不產生連結
+def contact_block(contact: Contact | None) -> dict[str, Any] | None:
+    """查不到卡、範圍外卡、無法回答訊息下方的聯絡區塊。沒有聯絡資料就回 None。
+
+    資料來自我們自己的 data/contact.json，不是模型輸出，不經過出處驗證，也不放進 prompt。
+    系統不知道學生是哪個班別，所以每個項目都連同適用對象或單位一起列出。
+    """
+    if contact is None:
+        return None
+    lines = [f"電話 {p.number}：{'、'.join(p.audience)}" for p in contact.phones]
+    lines += [f"電子郵件 {e.address}：{e.unit}" for e in contact.emails]
+    if contact.location:
+        lines.append(f"地點：{contact.location}")
+    if contact.office_hours:
+        lines.append(f"辦公時間：{contact.office_hours}")  # 沒填就整行不顯示
+    return {
+        "title": CONTACT_TITLE,
+        "hint": CONTACT_HINT,
+        "lines": [clean_text(line) for line in lines],
+        "checked": clean_text(CONTACT_CHECKED_PREFIX + contact.checked_on),
+    }
+# 防護 5 結束
+
+
+def message_card(kind: str, contact: dict[str, Any] | None = None) -> dict[str, Any]:
+    """查不到卡、範圍外卡、無法回答訊息。contact 是 contact_block 的結果，沒有就不加。"""
     text = {
         "no_info": NO_INFO_TEXT,
         "out_of_scope": OUT_OF_SCOPE_TEXT,
         "unavailable": UNAVAILABLE_TEXT,
     }[kind]
-    return {"kind": kind, "message": text}
+    card: dict[str, Any] = {"kind": kind, "message": text}
+    if contact is not None:
+        card["contact"] = contact
+    return card
 
 
 def _item(text: str, refs: list[int], label: str | None = None) -> dict[str, Any]:

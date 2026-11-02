@@ -56,9 +56,29 @@ function renderAnswerCard(card) {
   return box;
 }
 
+function renderContact(contact) {
+  const sec = makeEl("section", "", "contact");
+  const heading = makeEl("h3", contact.title);
+  heading.appendChild(makeEl("small", contact.hint, "contact-hint"));
+  sec.appendChild(heading);
+  const list = makeEl("ul");
+  for (const line of contact.lines) {
+    list.appendChild(makeEl("li", line));
+  }
+  sec.appendChild(list);
+  sec.appendChild(makeEl("small", contact.checked, "contact-checked"));
+  return sec;
+}
+
 function renderMessageCard(card) {
   const cls = card.kind === "unavailable" ? "card unavailable" : "card warn";
-  return makeEl("div", card.message, cls);
+  if (!card.contact) {
+    return makeEl("div", card.message, cls); // 沒有聯絡資料：只顯示「請洽系辦」那句
+  }
+  const box = makeEl("div", "", cls);
+  box.appendChild(makeEl("p", card.message, "message"));
+  box.appendChild(renderContact(card.contact));
+  return box;
 }
 
 function renderCard(card) {
@@ -104,6 +124,11 @@ function setBusy(value) {
   updateForm();
 }
 
+// 連不上伺服器時，聯絡方式用頁面載入時 /api/meta 已經拿到的那份（沒有就只顯示訊息）
+function unavailableCard() {
+  return { kind: "unavailable", message: meta.unavailable_text, contact: meta.contact || null };
+}
+
 async function submit(event) {
   event.preventDefault();
   if (busy) {
@@ -124,9 +149,9 @@ async function submit(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, stage }),
     });
-    card = res.ok ? await res.json() : { kind: "unavailable", message: meta.unavailable_text };
+    card = res.ok ? await res.json() : unavailableCard();
   } catch (err) {
-    card = { kind: "unavailable", message: meta.unavailable_text };
+    card = unavailableCard();
   }
   entry.appendChild(renderCard(card));
   scrollToEntry(entry); // 卡片加進去後內容變高，再對齊一次這一則的開頭

@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any
 
 from sop_agent.applog import AppLog, ErrorType, Step
-from sop_agent.cards import build_answer_card, clean_text, message_card
+from sop_agent.cards import build_answer_card, clean_text, contact_block, message_card
 from sop_agent.config import Config
+from sop_agent.contact import Contact, ContactLoad
 from sop_agent.library import Library
 from sop_agent.prompt import SYSTEM_PROMPT, build_prompt, validate_stage
 from sop_agent.runner import Runner, RunnerError
@@ -73,14 +74,26 @@ def unknown_library_stages(library: Library, stages: Stages) -> list[str]:
 
 
 class AskService:
-    def __init__(self, config: Config, library: Library, stages: Stages, runner: Runner, log: AppLog):
+    def __init__(
+        self,
+        config: Config,
+        library: Library,
+        stages: Stages,
+        runner: Runner,
+        log: AppLog,
+        contact: Contact | None = None,
+    ):
         self._config = config
         self._library = library
         self._stages = stages
         self._runner = runner
         self._log = log
+        self._contact = contact_block(contact)
         self._lock = threading.Lock()  # 同一時間只處理一個問題
         self._current_step = Step.SELECT_DOCS  # 未預期的例外發生時，紀錄是在哪一步
+
+    def _message(self, kind: str) -> dict[str, Any]:
+        return message_card(kind, self._contact)
 
     # 防護 3 開始：問題當資料（輸入驗證與階段白名單）
     def validate(self, question: object, stage: object) -> tuple[str, str | None]:
@@ -105,12 +118,12 @@ class AskService:
         """question、stage 必須是 validate() 的回傳值。回傳要顯示的卡片。"""
         if not self._lock.acquire(blocking=False):
             self._log.record(ErrorType.BUSY, Step.RUN_CLAUDE)
-            return message_card("unavailable")
+            return self._message("unavailable")
         try:
             return self._ask_locked(question, stage)
         except Exception:  # 未預期的例外：學生只會看到「無法回答」，不會看到內容
             self._log.record(ErrorType.INTERNAL_ERROR, self._current_step)
-            return message_card("unavailable")
+            return self._message("unavailable")
         finally:
             self._lock.release()
 
@@ -119,13 +132,13 @@ class AskService:
         selection = select_documents(self._library, stage, self._config.max_prompt_chars)
         if selection.status is SelectionStatus.LIBRARY_EMPTY:
             self._log.record(ErrorType.LIBRARY_EMPTY, Step.SELECT_DOCS)
-            return message_card("unavailable")
+            return self._message("unavailable")
         if selection.status is SelectionStatus.OVER_BUDGET:
             # 挑段落尚未實作，所以暫時無法回答
             self._log.record(ErrorType.OVER_BUDGET, Step.SELECT_DOCS)
-            return message_card("unavailable")
+            return self._message("unavailable")
         if selection.status is SelectionStatus.NO_DOCS_FOR_STAGE:
-            return message_card("no_info")  # 正常結果，不算錯誤，不記錄
+            return self._message("no_info")  # 正常結果，不算錯誤，不記錄
 
         self._current_step = Step.RUN_CLAUDE
         prompt = build_prompt(question, stage, selection.docs)
@@ -133,7 +146,7 @@ class AskService:
             stdout = self._runner.run(prompt, SYSTEM_PROMPT)
         except RunnerError as e:
             self._log.record(e.error, Step.RUN_CLAUDE)
-            return message_card("unavailable")
+            return self._message("unavailable")
 
         # 防護 4 開始：輸出檢查（格式與出處驗證，沒過就改成查不到卡）
         self._current_step = Step.PARSE
@@ -142,14 +155,14 @@ class AskService:
             response = parse_model_response(payload)
         except SchemaError:
             self._log.record(ErrorType.BAD_FORMAT, Step.PARSE)
-            return message_card("no_info")
+            return self._message("no_info")
 
         self._current_step = Step.VERIFY
         docs = selection.by_id()
         verified = verify(response, docs, self._config.min_quote_chars)
         if not verified.ok:
             self._log.record(ErrorType.VERIFY_FAILED, Step.VERIFY)
-            return message_card("no_info")
+            return self._message("no_info")
         if response.status == "answered":
             # 「適用」欄的 term 沒過就只省略「適用」那一段；紀錄只有固定代號，不記 term 內容
             response, term_problems = sanitize_terms(response, docs)
@@ -163,13 +176,13 @@ class AskService:
         # 防護 4 結束
 
         if response.status == "not_in_documents":
-            return message_card("no_info")
+            return self._message("no_info")
         if response.status == "out_of_scope":
-            return message_card("out_of_scope")
+            return self._message("out_of_scope")
         return build_answer_card(response, verified.shown_quotes, docs, stage_selected=stage is not None)
 
 
-def print_startup_notes(library: Library, stages: Stages) -> None:
+def print_startup_notes(library: Library, stages: Stages, contact: ContactLoad | None = None) -> None:
     """啟動時的提醒，印在終端機。不是錯誤，不影響啟動。"""
     if not library.docs:
         print("提醒：文件庫是空的，學生提問時會看到「無法回答」訊息。", file=sys.stderr)
@@ -180,3 +193,6 @@ def print_startup_notes(library: Library, stages: Stages) -> None:
             + "、".join(unknown),
             file=sys.stderr,
         )
+    if contact is not None:
+        for note in contact.notes:
+            print("警告：" + note, file=sys.stderr)  # 只印終端機，不寫進 logs/app.log

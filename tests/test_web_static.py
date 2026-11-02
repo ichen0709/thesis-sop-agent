@@ -72,6 +72,14 @@ def test_app_js_sends_json_to_same_origin_only():
     assert not re.search(r"https?://", APP_JS)
 
 
+def test_front_end_makes_no_links_for_contact_info():
+    """聯絡方式一律純文字：前端不產生 mailto、tel 連結，也沒有 <a>。"""
+    for name in ("app.js", "safe.js", "index.html"):
+        text = (WEB / name).read_text(encoding="utf-8").lower()
+        assert "mailto:" not in text and "tel:" not in text, name
+        assert "<a " not in text and '"a"' not in text, name
+
+
 # --- index.html ---
 
 def test_index_html_has_no_inline_script_or_event_handlers():
