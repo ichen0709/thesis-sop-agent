@@ -70,6 +70,13 @@ uv run python tests/demo_server.py
 - 一份文件一個檔案。新版不要改檔名：直接替換檔案，並更新 `version_date`。
 - 舊版移到 `library_archive/`（程式不讀）。
 
+### 來源與訪談整理
+
+- **正式規定與表單**：`source` 填文件名稱與發文單位，`version_date` 是文件本身的版本日期。
+- **承辦人訪談整理**：`source` 填「承辦人訪談整理」，`version_date` 填訪談日期，`title` 結尾加「（訪談整理）」，學生從出處就分得出這不是正式規定。
+- 訪談整理放進 `library/` 之前，必須經承辦人確認。確認紀錄不放進 repo，存在不公開的地方；commit 訊息最多寫「已經承辦人確認」，不寫姓名與內容。理由見 `docs/requirements.md` 第 10 節。
+- 這項確認是人的流程，檔頭沒有對應欄位，程式也不會檢查。
+
 ### 範例檔頭
 
 每份文件的最前面都要有檔頭，用 `---` 包起來；檔頭下面才是內文。這是 `library/thesis-oral-exam-sop.md` 的樣子（內容為示意）：
@@ -84,6 +91,20 @@ public: true
 stages: [口試前, 口試後]
 ---
 （這裡開始是內文，逐字照系辦原文，不要改寫、不要翻譯。）
+```
+
+「訪談整理」的範例檔頭（假資料，不是真的文件）：
+
+```text
+---
+id: oral-exam-common-mistakes
+title: 口試申請常見錯誤（訪談整理）
+source: 承辦人訪談整理
+version_date: 2025-10-15
+public: true
+stages: [口試前]
+---
+（這裡開始是經承辦人確認過的整理內容。）
 ```
 
 欄位說明：
